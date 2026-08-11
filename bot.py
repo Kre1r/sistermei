@@ -1,4 +1,5 @@
 import os
+import asyncio
 import random
 import discord
 from discord.ext import commands
@@ -11,7 +12,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Groq API Configuration (Groq uses OpenAI compatible client)
+# Groq API Configuration
 groq_api_key = os.getenv("GROQ_API_KEY")
 if groq_api_key:
     groq_client = OpenAI(
@@ -51,6 +52,10 @@ class RoleSelectView(discord.ui.View):
     async def investigator_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.assign_role(interaction, "🕵️ Detective / Investigator")
 
+    @discord.ui.button(label="Defense Attorney", style=discord.ButtonStyle.success, custom_id="role_lawyer")
+    async def lawyer_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.assign_role(interaction, "🛡️ Lead Defense Attorney")
+
 
 @bot.event
 async def on_ready():
@@ -69,42 +74,69 @@ async def justice(ctx, member: discord.Member, *, crime_description="General Sus
         await ctx.send("⚠️ 'courtroom-alpha' channel not found! Run `!setup_court` first.")
         return
 
+    lawyer_role = discord.utils.get(ctx.guild.roles, name="🛡️ Lead Defense Attorney")
+    lawyer_mention = lawyer_role.mention if lawyer_role else "@DefenseAttorney"
+
     embed = discord.Embed(
         title="⚖️ THE DIVINE TRIAL HAS BEGUN",
-        description=f"**{member.mention}**, Supreme Judge Tole Tole and the Groq AI Tribunal summon you to answer for your deeds!",
+        description=f"**{member.mention}** is on trial! Defense Attorney ({lawyer_mention}), prepare to defend your client.",
         color=discord.Color.orange()
     )
     embed.add_field(name="Accusation / Crime", value=crime_description, inline=False)
-    embed.set_footer(text="You have 30 seconds to type your defense message right here!")
+    embed.set_footer(text="30-second interactive court session has started. Defendant and Lawyers can chat freely!")
     
     await courtroom.send(embed=embed)
-    await courtroom.send(f"{member.mention}, speak now! Defend yourself against this accusation.")
+    await courtroom.send(f"⚖️ Supreme Judge Tole Tole demands answers from {member.mention} and attorney {lawyer_mention}!")
+
+    # 30-second interactive chat collection loop
+    chat_history = []
+    end_time = asyncio.get_event_loop().time() + 30.0
 
     def check(m):
-        return m.author == member and m.channel == courtroom
+        return m.channel == courtroom and (m.author == member or (lawyer_role and lawyer_role in m.author.roles))
 
-    try:
-        defense_msg = await bot.wait_for('message', timeout=30.0, check=check)
-        defense_text = defense_msg.content
-    except Exception:
-        defense_text = "[No defense provided - Silence is treated as guilt or disrespect]"
+    while asyncio.get_event_loop().time() < end_time:
+        remaining = int(end_time - asyncio.get_event_loop().time())
+        try:
+            msg = await bot.wait_for('message', timeout=min(5.0, max(1.0, remaining)), check=check)
+            role_label = "Defendant" if msg.author == member else "Defense Attorney"
+            chat_history.append(f"{role_label} ({msg.author.display_name}): {msg.content}")
+            
+            # Interactive mid-trial cat judge response if Groq is available
+            if groq_client and len(chat_history) % 2 == 1:
+                mid_prompt = f"""
+                You are Tole Tole, a strict, sassy supreme cat judge. 
+                Trial Crime: {crime_description}
+                Live courtroom dialogue so far:
+                {chr(10).join(chat_history)}
+                
+                Write a short, sharp, sarcastic or intimidating sentence reacting to the latest defense statement as the judge. Keep it under 2 sentences.
+                """
+                res = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": mid_prompt}])
+                await courtroom.send(f"🐾 **Judge Tole Tole:** {res.choices[0].message.content.strip()}")
+        except asyncio.TimeoutError:
+            continue
 
+    formatted_defense = "\n".join(chat_history) if chat_history else "[No defense or lawyer statement provided - Total Silence]"
+
+    # Final AI Evaluation
     verdict = "DELAY"
     ai_reason = "AI evaluation fallback."
 
     if groq_client:
         prompt = f"""
-        You are Tole Tole, a strict and supreme cat judge. Evaluate the following trial:
+        You are Tole Tole, a strict and supreme cat judge. Evaluate the completed trial:
         Accused: {member.display_name}
         Crime/Accusation: {crime_description}
-        Defense Statement: {defense_text}
+        Full Court Defense Transcript:
+        {formatted_defense}
 
-        You must choose ONLY ONE of these three verdicts:
-        1. GUILTY (Deserves jail)
-        2. INNOCENT (Free to go)
-        3. DELAY (Suspicious/Delay/Inconclusive - needs a 10-second slowmode penalty across channels to calm down)
+        Choose ONLY ONE verdict:
+        1. GUILTY
+        2. INNOCENT
+        3. DELAY (Needs 10-second slowmode penalty across channels)
 
-        Format your response strictly as:
+        Format strictly as:
         VERDICT: [GUILTY / INNOCENT / DELAY]
         REASON: [Short dramatic cat-judge explanation]
         """
@@ -124,13 +156,13 @@ async def justice(ctx, member: discord.Member, *, crime_description="General Sus
         except Exception as e:
             ai_reason = f"Groq API Error: {e}"
     else:
-        verdict = "GUILTY" if len(defense_text) < 10 else "DELAY"
-        ai_reason = "Simulated verdict due to missing Groq API key configuration."
+        verdict = "GUILTY" if len(formatted_defense) < 20 else "DELAY"
+        ai_reason = "Simulated verdict."
 
-    result_embed = discord.Embed(title="📜 GROQ AI JUDGMENT VERDICT", color=discord.Color.purple())
+    result_embed = discord.Embed(title="📜 FINAL JUDGMENT VERDICT", color=discord.Color.purple())
     result_embed.add_field(name="Defendant", value=member.mention, inline=True)
     result_embed.add_field(name="Final Verdict", value=verdict, inline=True)
-    result_embed.add_field(name="Judge's Notes", value=ai_reason, inline=False)
+    result_embed.add_field(name="Judge's Ruling", value=ai_reason, inline=False)
     await courtroom.send(embed=result_embed)
 
     if verdict == "GUILTY":
@@ -145,13 +177,13 @@ async def justice(ctx, member: discord.Member, *, crime_description="General Sus
                 await channel.edit(slowmode_delay=10)
             except Exception:
                 pass
-        await courtroom.send(f"⏳ **Trial Suspended / Borderline Case!** Supreme Tole Tole enforces a **10-second slowmode** across all channels.")
+        await courtroom.send(f"⏳ **Trial Borderline!** Supreme Tole Tole enforces a **10-second slowmode** across all channels.")
 
     elif verdict == "INNOCENT":
         jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
         if jailed_role and jailed_role in member.roles:
             await member.remove_roles(jailed_role)
-        await courtroom.send(f"✨ **{member.mention} has been declared innocent!** Walk free under the sun.")
+        await courtroom.send(f"✨ **{member.mention} has been declared innocent!**")
 
 
 @bot.command(name="pardon")
@@ -177,7 +209,7 @@ async def pardon(ctx, member: discord.Member):
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging channels & roles, building the Groq AI-powered judiciary universe...")
+    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging channels & roles, building the full AI judiciary universe...")
 
     try:
         for channel in guild.channels:
@@ -242,12 +274,12 @@ async def setup_court(ctx):
 
         cat_info = await guild.create_category("🏛️ ┃ COURT INFORMATION")
         ch_rules = await guild.create_text_channel("rules-and-lore", category=cat_info, overwrites=overwrites_public)
-        await ch_rules.send("📜 **GROQ AI JUSTICE SYSTEM ACTIVE:** Use `!justice @user [crime]` to put someone on trial. The AI will evaluate their defense!")
+        await ch_rules.send("📜 **INTERACTIVE AI JUSTICE:** Use `!justice @user [crime]` to start a trial. Defendants and Lawyers can chat during the 30-second defense phase!")
 
         roles_channel = await guild.create_text_channel("roles-selection", category=cat_info, overwrites=overwrites_public)
         embed = discord.Embed(
             title="🐾 Tole Tole Supreme Court - Role Selection",
-            description="Claim your faction by clicking below.",
+            description="Claim your faction by clicking below (including Defense Attorney!).",
             color=discord.Color.gold(),
         )
         await roles_channel.send(embed=embed, view=RoleSelectView())
@@ -267,7 +299,7 @@ async def setup_court(ctx):
         cat_staff = await guild.create_category("🔒 ┃ JUDICIAL CHAMBERS")
         await guild.create_text_channel("judge-tole-tole-office", category=cat_staff, overwrites=overwrites_locked)
 
-        await ctx.send("✅ **Setup Complete!** All channels and roles created. Everyone has been granted the general view role.")
+        await ctx.send("✅ **Setup Complete!** All roles, categories and channels successfully created.")
 
     except Exception as e:
         print(f"Error during setup: {e}")
