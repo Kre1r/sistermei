@@ -53,18 +53,31 @@ async def jail(ctx, member: discord.Member, *, reason="Contempt of Supreme Cat L
         await ctx.send("❌ Access Denied: Only Supreme Judges and Chief Justices can execute sentences.")
         return
 
-    defendant_role = discord.utils.get(ctx.guild.roles, name="👤 Defendant / Accused")
-    if defendant_role:
-        await member.add_roles(defendant_role)
+    jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
+    if jailed_role:
+        await member.add_roles(jailed_role)
 
     embed = discord.Embed(
-        title="⚖️ VERDICT OF SUPREME TOLE TOLE",
-        description=f"**{member.mention}** has been found guilty under the strict claws of justice!",
-        color=discord.Color.red()
+        title="⚖️ SENTENCE TO THE CAT CELL",
+        description=f"**{member.mention}** has been locked up behind bars under Tole Tole's strict judgment!",
+        color=discord.Color.dark_red()
     )
-    embed.add_field(name="Offense", value=reason, inline=False)
-    embed.set_footer(text="May Tole Tole have mercy on your soul.")
+    embed.add_field(name="Reason", value=reason, inline=False)
+    embed.set_footer(text="Silence echoes in the dark cell.")
     await ctx.send(embed=embed)
+
+
+@bot.command(name="pardon")
+async def pardon(ctx, member: discord.Member):
+    if not any(r.name in ["👑 Supreme Judge Tole Tole"] for r in ctx.author.roles):
+        await ctx.send("❌ Access Denied: Only Supreme Judge Tole Tole can grant freedom.")
+        return
+
+    jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
+    if jailed_role and jailed_role in member.roles:
+        await member.remove_roles(jailed_role)
+    
+    await ctx.send(f"✨ **{member.mention}** has been released from the cell by the supreme mercy of Tole Tole!")
 
 
 @bot.command(name="evidence")
@@ -89,24 +102,11 @@ async def evidence(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command(name="pardon")
-async def pardon(ctx, member: discord.Member):
-    if not any(r.name in ["👑 Supreme Judge Tole Tole"] for r in ctx.author.roles):
-        await ctx.send("❌ Access Denied: Only Supreme Judge Tole Tole can grant mercy.")
-        return
-
-    defendant_role = discord.utils.get(ctx.guild.roles, name="👤 Defendant / Accused")
-    if defendant_role and defendant_role in member.roles:
-        await member.remove_roles(defendant_role)
-    
-    await ctx.send(f"✨ **{member.mention}** has been pardoned by the supreme grace of Tole Tole!")
-
-
 @bot.command(name="setup_court")
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging timeline and reconstructing the ultimate judicial universe...")
+    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging channels and roles, reconstructing the ultimate judicial universe...")
 
     try:
         for channel in guild.channels:
@@ -114,6 +114,13 @@ async def setup_court(ctx):
                 await channel.delete()
             except:
                 pass
+
+        for role in guild.roles:
+            if role != guild.default_role and not role.managed and role < guild.me.top_role:
+                try:
+                    await role.delete()
+                except:
+                    pass
 
         roles_config = {
             "👑 Supreme Judge Tole Tole": (discord.Color.gold(), discord.Permissions.all()),
@@ -125,6 +132,7 @@ async def setup_court(ctx):
             "🕵️ Detective / Investigator": (discord.Color.dark_grey(), discord.Permissions(view_audit_log=True)),
             "👤 Defendant / Accused": (discord.Color.lighter_grey(), discord.Permissions.none()),
             "📢 Witness / Public": (discord.Color.default(), discord.Permissions.none()),
+            "🔒 Jailed": (discord.Color.dark_theme(), discord.Permissions.none()),
         }
 
         created_roles = {}
@@ -134,16 +142,25 @@ async def setup_court(ctx):
 
         judge_role = created_roles["👑 Supreme Judge Tole Tole"]
         public_role = created_roles["📢 Witness / Public"]
+        jailed_role = created_roles["🔒 Jailed"]
 
         overwrites_public = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             public_role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-            judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
+            judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True),
+            jailed_role: discord.PermissionOverwrite(view_channel=False)
         }
 
         overwrites_locked = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            judge_role: discord.PermissionOverwrite(view_channel=True)
+            judge_role: discord.PermissionOverwrite(view_channel=True),
+            jailed_role: discord.PermissionOverwrite(view_channel=False)
+        }
+
+        jail_overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            jailed_role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
         }
 
         cat_info = await guild.create_category("🏛️ ┃ COURT INFORMATION")
@@ -153,7 +170,7 @@ async def setup_court(ctx):
             "📜 **THE LAWS OF TOLE TOLE**\n\n"
             "1. Supreme Judge Tole Tole's word is absolute truth.\n"
             "2. No whispering false testimonies during active trials.\n"
-            "3. Disrespecting the claws of justice results in immediate banishment."
+            "3. Disrespecting the claws of justice results in immediate banishment to the cell."
         )
 
         ch_ann = await guild.create_text_channel("announcements", category=cat_info, overwrites=overwrites_public)
@@ -167,8 +184,11 @@ async def setup_court(ctx):
         )
         await roles_channel.send(embed=embed, view=RoleSelectView())
 
+        cat_cell = await guild.create_category("⛓️ ┃ PRISON SYSTEM")
+        ch_jail = await guild.create_text_channel("the-cat-cell", category=cat_cell, overwrites=jail_overwrites, slowmode_delay=5)
+        await ch_jail.send("⛓️ **Welcome to the Cat Cell.** You are imprisoned here under strict supervision. A 5-second slowmode is enforced.")
+
         cat_community = await guild.create_category("🐾 ┃ TOLE TOLE SANCTUARY")
-        
         ch_gen = await guild.create_text_channel("general-chat", category=cat_community, overwrites=overwrites_public)
         await ch_gen.send("💬 Welcome to the sanctuary lounge. Discuss fandom theories under the watchful eye of Tole Tole.")
         
@@ -178,7 +198,6 @@ async def setup_court(ctx):
         await guild.create_voice_channel("Purr Lounge 2 (VC)", category=cat_community, overwrites=overwrites_public)
 
         cat_courtroom = await guild.create_category("⚖️ ┃ THE GRAND COURTROOMS")
-        
         ch_alpha = await guild.create_text_channel("courtroom-alpha", category=cat_courtroom, overwrites=overwrites_public)
         await ch_alpha.send("⚖️ **Courtroom Alpha is active.** Silence in the room! Trial proceedings are starting.")
         
