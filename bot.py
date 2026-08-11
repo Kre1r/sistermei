@@ -52,7 +52,7 @@ class SovereignJudicialView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    print(f"🔥 [SOVEREIGN CORE V4 - STABLE] Logged in as {bot.user} - Supreme Judge Tole Tole Global System Online")
+    print(f"🔥 [SOVEREIGN CORE V5 - UNBREAKABLE] Logged in as {bot.user} - Supreme Judge Tole Tole Global System Online")
     bot.add_view(SovereignJudicialView())
 
 
@@ -60,17 +60,22 @@ async def on_ready():
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    status_msg = await ctx.send("🧹 **[SYSTEM PURGE INITIALIZED]** Wiping legacy server architecture safely...")
+    
+    # 1. Önce komutun atıldığı kanalı silmek yerine geçici bir sistem konsolu açıyoruz ki 404 vermesin.
+    temp_category = await guild.create_category("⚙️ ┃ SYSTEM CONSOLE")
+    logger_channel = await guild.create_text_channel("system-deployment", category=temp_category)
+    await logger_channel.send("🧹 **[SYSTEM PURGE INITIALIZED]** Wiping legacy server architecture safely under Supreme Judge Tole Tole...")
 
-    # 1. Güvenli Kanal Temizliği (Rate Limit yemeden)
+    # 2. Güvenli Kanal Temizliği (Sistem konsolu hariç her şeyi uçurur)
     for channel in guild.channels:
-        try:
-            await channel.delete()
-            await asyncio.sleep(0.3)
-        except Exception:
-            pass
+        if channel.id != logger_channel.id and channel.id != temp_category.id:
+            try:
+                await channel.delete()
+                await asyncio.sleep(0.3)
+            except Exception:
+                pass
 
-    # 2. Güvenli Rol Temizliği
+    # 3. Güvenli Rol Temizliği
     for role in guild.roles:
         if role != guild.default_role and not role.managed and role < guild.me.top_role:
             try:
@@ -79,7 +84,7 @@ async def setup_court(ctx):
             except Exception:
                 pass
 
-    await status_msg.edit(content="⚡ **[WIPE COMPLETE]** Building pristine sovereign infrastructure with rate-limit protection...")
+    await logger_channel.send("⚡ **[WIPE COMPLETE]** Building expansive sovereign infrastructure with advanced channels...")
 
     try:
         roles_config = {
@@ -98,7 +103,7 @@ async def setup_court(ctx):
         for r_name, (r_color, r_perms) in roles_config.items():
             role = await guild.create_role(name=r_name, color=r_color, permissions=r_perms)
             created_roles[r_name] = role
-            await asyncio.sleep(0.4)  # Discord API koruması
+            await asyncio.sleep(0.3)
 
         judge_role = created_roles["👑 Supreme Judge Tole Tole"]
         jailed_role = created_roles["🔒 Jailed"]
@@ -122,9 +127,9 @@ async def setup_court(ctx):
             judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
         }
 
-        # Kategoriler ve Kanallar (Gecikmeli güvenli oluşturma)
+        # --- GENİŞLETİLMİŞ YENİ SUNUCU YAPISI ---
         cat_info = await guild.create_category("🏛️ ┃ GLOBAL COURT ADMINISTRATION")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.4)
         ch_rules = await guild.create_text_channel("protocols-and-lore", category=cat_info, overwrites=overwrites_public)
         await ch_rules.send("📜 **Tole Tole Global Judiciary Active.** Execute trials using `!justice @user [indictment]`. Strict international English protocol enforced.")
 
@@ -132,19 +137,32 @@ async def setup_court(ctx):
         embed = discord.Embed(title="⚖️ Supreme Court - Sovereign Faction Panel", description="Interact with the encrypted module below to establish your global judicial clearance.", color=discord.Color.gold())
         await ch_roles.send(embed=embed, view=SovereignJudicialView())
 
+        # 10 Adet Mahkeme Salonu (Artık kanallar az değil, bolca var)
         cat_court = await guild.create_category("⚖️ ┃ INTERNATIONAL TRIBUNALS")
-        await asyncio.sleep(0.5)
-        for i in range(1, 6):
+        await asyncio.sleep(0.4)
+        for i in range(1, 11):
             await guild.create_text_channel(f"courtroom-{i}", category=cat_court, overwrites=overwrites_public)
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.2)
 
+        # Destek ve Sosyal Kanallar
+        cat_social = await guild.create_category("🌍 ┃ GLOBAL PUBLIC HUB")
+        await asyncio.sleep(0.4)
+        await guild.create_text_channel("general-discussion", category=cat_social, overwrites=overwrites_public)
+        await guild.create_text_channel("witness-testimonies", category=cat_social, overwrites=overwrites_public)
+        await guild.create_text_channel("supreme-announcements", category=cat_social, overwrites=overwrites_public)
+
+        # Federal Hapishane
         cat_prison = await guild.create_category("⛓️ ┃ FEDERAL PENITENTIARY")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.4)
         await guild.create_text_channel("solitary-confinement", category=cat_prison, overwrites=jail_overwrites, slowmode_delay=10)
+        await guild.create_text_channel("maximum-security-chat", category=cat_prison, overwrites=jail_overwrites)
 
-        await ctx.send("✅ **Sovereign Rebuilding Complete:** Server wiped clean and successfully built without any rate-limit or build failures.")
+        # Geçici konsolu en son silip her şeyi temizliyoruz
+        await logger_channel.delete()
+        await temp_category.delete()
+
     except Exception as e:
-        await ctx.send(f"❌ Critical Rebuild Error: {e}")
+        print(f"Critical Rebuild Error: {e}")
 
 
 @bot.command(name="justice")
@@ -167,7 +185,7 @@ async def justice(ctx, member: discord.Member, *, crime_description: str):
     lawyer_mention = lawyer_role.mention if lawyer_role else "@DefenseAttorney"
 
     start_embed = discord.Embed(
-        title="⚖️ TOLE Tole GLOBAL SUPREME COURT - TRIBUNAL ACTIVE",
+        title="⚖️ TOLE TOLE GLOBAL SUPREME COURT - TRIBUNAL ACTIVE",
         description=f"**Defendant:** {member.mention}\n**Indictment:** {crime_description}\n\n*Supreme Judge Tole Tole demands absolute order. The Defendant and defense counsel ({lawyer_mention}) may present their arguments.*",
         color=discord.Color.dark_red()
     )
