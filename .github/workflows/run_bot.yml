@@ -1,9 +1,9 @@
 name: Run Discord Court Bot
 
 on:
-  workflow_dispatch: # Manuel olarak Actions sekmesinden başlatmak için
+  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Her 6 saatte bir tetiklemek istersen (opsiyonel)
+    - cron: '0 */6 * * *'
 
 jobs:
   run-bot:
@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-      python-version: '3.10'
+        python-version: '3.10'
 
     - name: Install dependencies
       run: |
