@@ -11,11 +11,9 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Groq API Configuration
 groq_api_key = os.getenv("GROQ_API_KEY")
 groq_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_api_key) if groq_api_key else None
 
-# Enterprise-grade persistent RAM backup & courtroom locking system
 user_roles_backup = {}
 active_trials = set()
 
@@ -54,7 +52,7 @@ class SovereignJudicialView(discord.ui.View):
 
 @bot.event
 async def on_ready():
-    print(f"🔥 [100x ENTERPRISE CORE] Logged in as {bot.user} - Supreme Judge Tole Tole Global System Operational")
+    print(f"🔥 [SOVEREIGN CORE V3] Logged in as {bot.user} - Supreme Judge Tole Tole Global System Online")
     bot.add_view(SovereignJudicialView())
 
 
@@ -62,7 +60,24 @@ async def on_ready():
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Initializing 100x enterprise-grade sovereign infrastructure...")
+    await ctx.send("🧹 **[SYSTEM PURGE INITIALIZED]** Wiping legacy server architecture for a complete absolute reset under Supreme Judge Tole Tole...")
+
+    # 1. Total Server Wipe (Wipe all channels and categories)
+    for channel in guild.channels:
+        try:
+            await channel.delete()
+        except Exception:
+            pass
+
+    # 2. Total Role Wipe (Purge custom roles safely, skipping bot-managed or default roles)
+    for role in guild.roles:
+        if role != guild.default_role and not role.managed and role < guild.me.top_role:
+            try:
+                await role.delete()
+            except Exception:
+                pass
+
+    await ctx.send("⚡ **[WIPE COMPLETE]** Rebuilding pristine sovereign infrastructure from absolute zero...")
 
     try:
         roles_config = {
@@ -104,7 +119,7 @@ async def setup_court(ctx):
             judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True)
         }
 
-        # Enterprise Architecture Deployment
+        # Build Clean Enterprise Architecture
         cat_info = await guild.create_category("🏛️ ┃ GLOBAL COURT ADMINISTRATION")
         ch_rules = await guild.create_text_channel("protocols-and-lore", category=cat_info, overwrites=overwrites_public)
         await ch_rules.send("📜 **Tole Tole Global Judiciary Active.** Execute trials using `!justice @user [indictment]`. Strict international English protocol enforced.")
@@ -120,9 +135,9 @@ async def setup_court(ctx):
         cat_prison = await guild.create_category("⛓️ ┃ FEDERAL PENITENTIARY")
         await guild.create_text_channel("solitary-confinement", category=cat_prison, overwrites=jail_overwrites, slowmode_delay=10)
 
-        await ctx.send("✅ **Deployment Successful:** 100x architecture fully compiled. Secure, multi-channel tribunal nodes online.")
+        await ctx.send("✅ **Sovereign Rebuilding Complete:** Server wiped clean and successfully initialized with absolute 100x architecture.")
     except Exception as e:
-        await ctx.send(f"❌ Critical Deployment Error: {e}")
+        await ctx.send(f"❌ Critical Rebuild Error: {e}")
 
 
 @bot.command(name="justice")
@@ -159,9 +174,7 @@ async def justice(ctx, member: discord.Member, *, crime_description: str):
     def check(m):
         return m.channel == courtroom and (m.author == member or (lawyer_role and lawyer_role in m.author.roles))
 
-    # 30-Second Unlimited Message Capture & Real-time AI Interrogation Loop
     while asyncio.get_event_loop().time() < end_time:
-        remaining = int(end_time - asyncio.get_event_loop().time())
         try:
             msg = await bot.wait_for('message', timeout=1.0, check=check)
             
@@ -187,7 +200,6 @@ async def justice(ctx, member: discord.Member, *, crime_description: str):
     active_trials.discard(courtroom.id)
     formatted_transcript = "\n".join(chat_history) if chat_history else "[The defendant and counsel displayed complete contempt of court by remaining entirely silent.]"
 
-    # AI Final Verdict Evaluation
     verdict = "DELAY"
     ai_reason = "Evaluation core compilation failed."
 
@@ -233,13 +245,10 @@ async def justice(ctx, member: discord.Member, *, crime_description: str):
     result_embed.add_field(name="Supreme Judge Tole Tole's Adjudication", value=ai_reason, inline=False)
     await courtroom.send(embed=result_embed)
 
-    # 100x Enterprise Punishment Execution & Secure Role Backup
     if verdict == "GUILTY":
         jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
         if jailed_role:
-            # Secure backup into RAM map
             user_roles_backup[member.id] = [r for r in member.roles if r != ctx.guild.default_role and r != jailed_role]
-            # Strip all clearances and enforce solitary confinement
             await member.edit(roles=[jailed_role])
         await courtroom.send(f"🚨 **Sentence Enforced:** {member.mention} has been formally convicted by Supreme Judge Tole Tole and transferred to Federal Solitary Confinement. All security clearance roles have been securely archived.")
 
@@ -262,7 +271,6 @@ async def pardon(ctx, member: discord.Member):
 
     jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
     
-    # Restore archived roles from backup matrix with absolute integrity
     original_roles = user_roles_backup.get(member.id, [])
     if jailed_role and jailed_role in member.roles:
         await member.remove_roles(jailed_role)
