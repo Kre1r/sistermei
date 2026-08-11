@@ -2,6 +2,7 @@ import os
 import random
 import discord
 from discord.ext import commands
+from openai import OpenAI
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -9,6 +10,16 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Groq API Configuration (Groq uses OpenAI compatible client)
+groq_api_key = os.getenv("GROQ_API_KEY")
+if groq_api_key:
+    groq_client = OpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=groq_api_key
+    )
+else:
+    groq_client = None
 
 
 class RoleSelectView(discord.ui.View):
@@ -47,24 +58,100 @@ async def on_ready():
     bot.add_view(RoleSelectView())
 
 
-@bot.command(name="jail")
-async def jail(ctx, member: discord.Member, *, reason="Contempt of Supreme Cat Law"):
-    if not any(r.name in ["👑 Supreme Judge Tole Tole", "⚖️ Chief Justice"] for r in ctx.author.roles):
-        await ctx.send("❌ Access Denied: Only Supreme Judges and Chief Justices can execute sentences.")
+@bot.command(name="justice")
+async def justice(ctx, member: discord.Member, *, crime_description="General Suspicion"):
+    if not any(r.name in ["👑 Supreme Judge Tole Tole", "⚖️ Chief Justice", "🕵️ Detective / Investigator"] for r in ctx.author.roles):
+        await ctx.send("❌ Access Denied: You don't have authority to initiate a divine trial.")
         return
 
-    jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
-    if jailed_role:
-        await member.add_roles(jailed_role)
+    courtroom = discord.utils.get(ctx.guild.text_channels, name="courtroom-alpha")
+    if not courtroom:
+        await ctx.send("⚠️ 'courtroom-alpha' channel not found! Run `!setup_court` first.")
+        return
 
     embed = discord.Embed(
-        title="⚖️ SENTENCE TO THE CAT CELL",
-        description=f"**{member.mention}** has been locked up behind bars under Tole Tole's strict judgment!",
-        color=discord.Color.dark_red()
+        title="⚖️ THE DIVINE TRIAL HAS BEGUN",
+        description=f"**{member.mention}**, Supreme Judge Tole Tole and the Groq AI Tribunal summon you to answer for your deeds!",
+        color=discord.Color.orange()
     )
-    embed.add_field(name="Reason", value=reason, inline=False)
-    embed.set_footer(text="Silence echoes in the dark cell.")
-    await ctx.send(embed=embed)
+    embed.add_field(name="Accusation / Crime", value=crime_description, inline=False)
+    embed.set_footer(text="You have 30 seconds to type your defense message right here!")
+    
+    await courtroom.send(embed=embed)
+    await courtroom.send(f"{member.mention}, speak now! Defend yourself against this accusation.")
+
+    def check(m):
+        return m.author == member and m.channel == courtroom
+
+    try:
+        defense_msg = await bot.wait_for('message', timeout=30.0, check=check)
+        defense_text = defense_msg.content
+    except Exception:
+        defense_text = "[No defense provided - Silence is treated as guilt or disrespect]"
+
+    verdict = "DELAY"
+    ai_reason = "AI evaluation fallback."
+
+    if groq_client:
+        prompt = f"""
+        You are Tole Tole, a strict and supreme cat judge. Evaluate the following trial:
+        Accused: {member.display_name}
+        Crime/Accusation: {crime_description}
+        Defense Statement: {defense_text}
+
+        You must choose ONLY ONE of these three verdicts:
+        1. GUILTY (Deserves jail)
+        2. INNOCENT (Free to go)
+        3. DELAY (Suspicious/Delay/Inconclusive - needs a 10-second slowmode penalty across channels to calm down)
+
+        Format your response strictly as:
+        VERDICT: [GUILTY / INNOCENT / DELAY]
+        REASON: [Short dramatic cat-judge explanation]
+        """
+        try:
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            ai_output = response.choices[0].message.content.strip()
+            if "GUILTY" in ai_output.upper():
+                verdict = "GUILTY"
+            elif "INNOCENT" in ai_output.upper():
+                verdict = "INNOCENT"
+            else:
+                verdict = "DELAY"
+            ai_reason = ai_output
+        except Exception as e:
+            ai_reason = f"Groq API Error: {e}"
+    else:
+        verdict = "GUILTY" if len(defense_text) < 10 else "DELAY"
+        ai_reason = "Simulated verdict due to missing Groq API key configuration."
+
+    result_embed = discord.Embed(title="📜 GROQ AI JUDGMENT VERDICT", color=discord.Color.purple())
+    result_embed.add_field(name="Defendant", value=member.mention, inline=True)
+    result_embed.add_field(name="Final Verdict", value=verdict, inline=True)
+    result_embed.add_field(name="Judge's Notes", value=ai_reason, inline=False)
+    await courtroom.send(embed=result_embed)
+
+    if verdict == "GUILTY":
+        jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
+        if jailed_role:
+            await member.add_roles(jailed_role)
+        await courtroom.send(f"🚨 **{member.mention} has been sentenced to the Cat Cell!**")
+
+    elif verdict == "DELAY":
+        for channel in ctx.guild.text_channels:
+            try:
+                await channel.edit(slowmode_delay=10)
+            except Exception:
+                pass
+        await courtroom.send(f"⏳ **Trial Suspended / Borderline Case!** Supreme Tole Tole enforces a **10-second slowmode** across all channels.")
+
+    elif verdict == "INNOCENT":
+        jailed_role = discord.utils.get(ctx.guild.roles, name="🔒 Jailed")
+        if jailed_role and jailed_role in member.roles:
+            await member.remove_roles(jailed_role)
+        await courtroom.send(f"✨ **{member.mention} has been declared innocent!** Walk free under the sun.")
 
 
 @bot.command(name="pardon")
@@ -77,36 +164,20 @@ async def pardon(ctx, member: discord.Member):
     if jailed_role and jailed_role in member.roles:
         await member.remove_roles(jailed_role)
     
-    await ctx.send(f"✨ **{member.mention}** has been released from the cell by the supreme mercy of Tole Tole!")
+    for channel in ctx.guild.text_channels:
+        try:
+            await channel.edit(slowmode_delay=0)
+        except Exception:
+            pass
 
-
-@bot.command(name="evidence")
-async def evidence(ctx):
-    if not any(r.name in ["🕵️ Detective / Investigator", "👑 Supreme Judge Tole Tole", "🏛️ Senior Prosecutor"] for r in ctx.author.roles):
-        await ctx.send("❌ Access Denied: Only Investigators, Judges, and Prosecutors can inspect the files.")
-        return
-
-    evidence_list = [
-        "🐾 A glowing supernatural paw print was found at the crime scene.",
-        "🐟 A half-eaten sacred fish outline indicating foul play.",
-        "📜 A classified transcript showing secret bribes under the rug.",
-        "🔍 Zero forensic residue detected. The criminal covered their tracks well.",
-    ]
-    chosen = random.choice(evidence_list)
-    
-    embed = discord.Embed(
-        title="📁 EVIDENCE INVESTIGATION REPORT",
-        description=chosen,
-        color=discord.Color.dark_grey()
-    )
-    await ctx.send(embed=embed)
+    await ctx.send(f"✨ **{member.mention}** has been pardoned and channel slowmodes have been lifted!")
 
 
 @bot.command(name="setup_court")
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging channels and roles, reconstructing the ultimate judicial universe...")
+    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging channels & roles, building the Groq AI-powered judiciary universe...")
 
     try:
         for channel in guild.channels:
@@ -133,6 +204,7 @@ async def setup_court(ctx):
             "👤 Defendant / Accused": (discord.Color.lighter_grey(), discord.Permissions.none()),
             "📢 Witness / Public": (discord.Color.default(), discord.Permissions.none()),
             "🔒 Jailed": (discord.Color.dark_theme(), discord.Permissions.none()),
+            "🌐 Citizen / Everyone": (discord.Color.blurple(), discord.Permissions(view_channel=True)),
         }
 
         created_roles = {}
@@ -141,13 +213,18 @@ async def setup_court(ctx):
             created_roles[r_name] = role
 
         judge_role = created_roles["👑 Supreme Judge Tole Tole"]
-        public_role = created_roles["📢 Witness / Public"]
         jailed_role = created_roles["🔒 Jailed"]
+        citizen_role = created_roles["🌐 Citizen / Everyone"]
+
+        for member in guild.members:
+            try:
+                await member.add_roles(citizen_role)
+            except:
+                pass
 
         overwrites_public = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            public_role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-            judge_role: discord.PermissionOverwrite(view_channel=True, manage_channels=True),
+            guild.default_role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            citizen_role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
             jailed_role: discord.PermissionOverwrite(view_channel=False)
         }
 
@@ -164,60 +241,33 @@ async def setup_court(ctx):
         }
 
         cat_info = await guild.create_category("🏛️ ┃ COURT INFORMATION")
-        
         ch_rules = await guild.create_text_channel("rules-and-lore", category=cat_info, overwrites=overwrites_public)
-        await ch_rules.send(
-            "📜 **THE LAWS OF TOLE TOLE**\n\n"
-            "1. Supreme Judge Tole Tole's word is absolute truth.\n"
-            "2. No whispering false testimonies during active trials.\n"
-            "3. Disrespecting the claws of justice results in immediate banishment to the cell."
-        )
-
-        ch_ann = await guild.create_text_channel("announcements", category=cat_info, overwrites=overwrites_public)
-        await ch_ann.send("📢 **Official Court Broadcast:** The court is now in session. Check your roles and prepare for trial!")
+        await ch_rules.send("📜 **GROQ AI JUSTICE SYSTEM ACTIVE:** Use `!justice @user [crime]` to put someone on trial. The AI will evaluate their defense!")
 
         roles_channel = await guild.create_text_channel("roles-selection", category=cat_info, overwrites=overwrites_public)
         embed = discord.Embed(
             title="🐾 Tole Tole Supreme Court - Role Selection",
-            description="Claim your faction within the judiciary system by clicking below.\n\n*Execute `!jail`, `!evidence`, and `!pardon` based on your authority.*",
+            description="Claim your faction by clicking below.",
             color=discord.Color.gold(),
         )
         await roles_channel.send(embed=embed, view=RoleSelectView())
 
         cat_cell = await guild.create_category("⛓️ ┃ PRISON SYSTEM")
         ch_jail = await guild.create_text_channel("the-cat-cell", category=cat_cell, overwrites=jail_overwrites, slowmode_delay=5)
-        await ch_jail.send("⛓️ **Welcome to the Cat Cell.** You are imprisoned here under strict supervision. A 5-second slowmode is enforced.")
+        await ch_jail.send("⛓️ **The Cat Cell:** Imprisoned users stay here.")
 
         cat_community = await guild.create_category("🐾 ┃ TOLE TOLE SANCTUARY")
-        ch_gen = await guild.create_text_channel("general-chat", category=cat_community, overwrites=overwrites_public)
-        await ch_gen.send("💬 Welcome to the sanctuary lounge. Discuss fandom theories under the watchful eye of Tole Tole.")
-        
-        await guild.create_text_channel("fandom-discussion", category=cat_community, overwrites=overwrites_public)
+        await guild.create_text_channel("general-chat", category=cat_community, overwrites=overwrites_public)
         await guild.create_text_channel("bot-commands", category=cat_community, overwrites=overwrites_public)
-        await guild.create_voice_channel("Purr Lounge 1 (VC)", category=cat_community, overwrites=overwrites_public)
-        await guild.create_voice_channel("Purr Lounge 2 (VC)", category=cat_community, overwrites=overwrites_public)
 
         cat_courtroom = await guild.create_category("⚖️ ┃ THE GRAND COURTROOMS")
-        ch_alpha = await guild.create_text_channel("courtroom-alpha", category=cat_courtroom, overwrites=overwrites_public)
-        await ch_alpha.send("⚖️ **Courtroom Alpha is active.** Silence in the room! Trial proceedings are starting.")
-        
+        await guild.create_text_channel("courtroom-alpha", category=cat_courtroom, overwrites=overwrites_public)
         await guild.create_text_channel("courtroom-beta", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_text_channel("witness-stand", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_text_channel("evidence-locker", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_voice_channel("Trial Audio Alpha (VC)", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_voice_channel("Trial Audio Beta (VC)", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_voice_channel("Audience Gallery (VC)", category=cat_courtroom, overwrites=overwrites_public)
-
-        cat_cases = await guild.create_category("📁 ┃ EVIDENCE & CASE FILES")
-        await guild.create_text_channel("crime-scene-reports", category=cat_cases, overwrites=overwrites_public)
-        await guild.create_text_channel("active-investigations", category=cat_cases, overwrites=overwrites_public)
-        await guild.create_text_channel("verdicts-and-sentences", category=cat_cases, overwrites=overwrites_public)
 
         cat_staff = await guild.create_category("🔒 ┃ JUDICIAL CHAMBERS")
         await guild.create_text_channel("judge-tole-tole-office", category=cat_staff, overwrites=overwrites_locked)
-        await guild.create_text_channel("prosecution-defense-strategy", category=cat_staff, overwrites=overwrites_locked)
-        await guild.create_text_channel("jury-deliberation-room", category=cat_staff, overwrites=overwrites_locked)
-        await guild.create_voice_channel("High Council Meeting (VC)", category=cat_staff, overwrites=overwrites_locked)
+
+        await ctx.send("✅ **Setup Complete!** All channels and roles created. Everyone has been granted the general view role.")
 
     except Exception as e:
         print(f"Error during setup: {e}")
