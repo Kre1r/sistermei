@@ -21,12 +21,12 @@ class RoleSelectView(discord.ui.View):
         if role:
             if role in interaction.user.roles:
                 await interaction.user.remove_roles(role)
-                await interaction.response.send_message(f"❌ Removed role: **{role.name}**", ephemeral=True)
+                await interaction.response.send_message(f"❌ Revoked: **{role.name}**", ephemeral=True)
             else:
                 await interaction.user.add_roles(role)
-                await interaction.response.send_message(f"✅ Assigned role: **{role.name}**", ephemeral=True)
+                await interaction.response.send_message(f"✅ Granted: **{role.name}**", ephemeral=True)
         else:
-            await interaction.response.send_message("⚠️ Role not found! Run `!setup_court` first.", ephemeral=True)
+            await interaction.response.send_message("⚠️ Role not found! Initialize with `!setup_court`.", ephemeral=True)
 
     @discord.ui.button(label="Witness / Public", style=discord.ButtonStyle.secondary, custom_id="role_witness")
     async def witness_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -48,39 +48,65 @@ async def on_ready():
 
 
 @bot.command(name="jail")
-async def jail(ctx, member: discord.Member, *, reason="Contempt of Court"):
+async def jail(ctx, member: discord.Member, *, reason="Contempt of Supreme Cat Law"):
     if not any(r.name in ["👑 Supreme Judge Tole Tole", "⚖️ Chief Justice"] for r in ctx.author.roles):
-        await ctx.send("❌ Only Supreme Judges and Chief Justices can use this command!")
+        await ctx.send("❌ Access Denied: Only Supreme Judges and Chief Justices can execute sentences.")
         return
 
     defendant_role = discord.utils.get(ctx.guild.roles, name="👤 Defendant / Accused")
     if defendant_role:
         await member.add_roles(defendant_role)
 
-    await ctx.send(f"🚨 **{member.mention}** has been found guilty and imprisoned by Supreme Judge Tole Tole!\n📌 **Reason:** {reason}")
+    embed = discord.Embed(
+        title="⚖️ VERDICT OF SUPREME TOLE TOLE",
+        description=f"**{member.mention}** has been found guilty under the strict claws of justice!",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="Offense", value=reason, inline=False)
+    embed.set_footer(text="May Tole Tole have mercy on your soul.")
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="evidence")
 async def evidence(ctx):
-    if not any(r.name in ["🕵️ Detective / Investigator", "👑 Supreme Judge Tole Tole"] for r in ctx.author.roles):
-        await ctx.send("❌ Only Investigators and Judges can search for evidence!")
+    if not any(r.name in ["🕵️ Detective / Investigator", "👑 Supreme Judge Tole Tole", "🏛️ Senior Prosecutor"] for r in ctx.author.roles):
+        await ctx.send("❌ Access Denied: Only Investigators, Judges, and Prosecutors can inspect the files.")
         return
 
     evidence_list = [
-        "🐾 A secret paw print left by Tole Tole was discovered!",
-        "🔍 A suspicious fish bone was recovered from the crime scene.",
-        "📜 A torn piece of a classified court transcript was found.",
-        "❌ No evidence could be recovered in this sector.",
+        "🐾 A glowing supernatural paw print was found at the crime scene.",
+        "🐟 A half-eaten sacred fish outline indicating foul play.",
+        "📜 A classified transcript showing secret bribes under the rug.",
+        "🔍 Zero forensic residue detected. The criminal covered their tracks well.",
     ]
     chosen = random.choice(evidence_list)
-    await ctx.send(f"🕵️ **Evidence Search Result:** {chosen}")
+    
+    embed = discord.Embed(
+        title="📁 EVIDENCE INVESTIGATION REPORT",
+        description=chosen,
+        color=discord.Color.dark_grey()
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="pardon")
+async def pardon(ctx, member: discord.Member):
+    if not any(r.name in ["👑 Supreme Judge Tole Tole"] for r in ctx.author.roles):
+        await ctx.send("❌ Access Denied: Only Supreme Judge Tole Tole can grant mercy.")
+        return
+
+    defendant_role = discord.utils.get(ctx.guild.roles, name="👤 Defendant / Accused")
+    if defendant_role and defendant_role in member.roles:
+        await member.remove_roles(defendant_role)
+    
+    await ctx.send(f"✨ **{member.mention}** has been pardoned by the supreme grace of Tole Tole!")
 
 
 @bot.command(name="setup_court")
 @commands.has_permissions(administrator=True)
 async def setup_court(ctx):
     guild = ctx.guild
-    await ctx.send("⚖️ **[Tole Tole Cat's Court]** Wiping server and building the full judicial infrastructure...")
+    await ctx.send("⚖️ **[Tole Tole Supreme Court]** Purging timeline and reconstructing the ultimate judicial universe...")
 
     try:
         for channel in guild.channels:
@@ -121,30 +147,58 @@ async def setup_court(ctx):
         }
 
         cat_info = await guild.create_category("🏛️ ┃ COURT INFORMATION")
-        await guild.create_text_channel("rules-and-lore", category=cat_info, overwrites=overwrites_public)
-        await guild.create_text_channel("announcements", category=cat_info, overwrites=overwrites_public)
-        roles_channel = await guild.create_text_channel("roles-selection", category=cat_info, overwrites=overwrites_public)
+        
+        ch_rules = await guild.create_text_channel("rules-and-lore", category=cat_info, overwrites=overwrites_public)
+        await ch_rules.send(
+            "📜 **THE LAWS OF TOLE TOLE**\n\n"
+            "1. Supreme Judge Tole Tole's word is absolute truth.\n"
+            "2. No whispering false testimonies during active trials.\n"
+            "3. Disrespecting the claws of justice results in immediate banishment."
+        )
 
+        ch_ann = await guild.create_text_channel("announcements", category=cat_info, overwrites=overwrites_public)
+        await ch_ann.send("📢 **Official Court Broadcast:** The court is now in session. Check your roles and prepare for trial!")
+
+        roles_channel = await guild.create_text_channel("roles-selection", category=cat_info, overwrites=overwrites_public)
         embed = discord.Embed(
-            title="🐾 Tole Tole Court - Role Selection",
-            description="Click the buttons below to assign or remove your role!\n\n*Note: Roles grant access and features like !jail and !evidence.*",
+            title="🐾 Tole Tole Supreme Court - Role Selection",
+            description="Claim your faction within the judiciary system by clicking below.\n\n*Execute `!jail`, `!evidence`, and `!pardon` based on your authority.*",
             color=discord.Color.gold(),
         )
         await roles_channel.send(embed=embed, view=RoleSelectView())
 
         cat_community = await guild.create_category("🐾 ┃ TOLE TOLE SANCTUARY")
-        await guild.create_text_channel("general-chat", category=cat_community, overwrites=overwrites_public)
+        
+        ch_gen = await guild.create_text_channel("general-chat", category=cat_community, overwrites=overwrites_public)
+        await ch_gen.send("💬 Welcome to the sanctuary lounge. Discuss fandom theories under the watchful eye of Tole Tole.")
+        
+        await guild.create_text_channel("fandom-discussion", category=cat_community, overwrites=overwrites_public)
         await guild.create_text_channel("bot-commands", category=cat_community, overwrites=overwrites_public)
-        await guild.create_voice_channel("Purr Lounge (VC)", category=cat_community, overwrites=overwrites_public)
+        await guild.create_voice_channel("Purr Lounge 1 (VC)", category=cat_community, overwrites=overwrites_public)
+        await guild.create_voice_channel("Purr Lounge 2 (VC)", category=cat_community, overwrites=overwrites_public)
 
         cat_courtroom = await guild.create_category("⚖️ ┃ THE GRAND COURTROOMS")
-        await guild.create_text_channel("courtroom-main", category=cat_courtroom, overwrites=overwrites_public)
+        
+        ch_alpha = await guild.create_text_channel("courtroom-alpha", category=cat_courtroom, overwrites=overwrites_public)
+        await ch_alpha.send("⚖️ **Courtroom Alpha is active.** Silence in the room! Trial proceedings are starting.")
+        
+        await guild.create_text_channel("courtroom-beta", category=cat_courtroom, overwrites=overwrites_public)
+        await guild.create_text_channel("witness-stand", category=cat_courtroom, overwrites=overwrites_public)
         await guild.create_text_channel("evidence-locker", category=cat_courtroom, overwrites=overwrites_public)
-        await guild.create_voice_channel("Trial Audio (VC)", category=cat_courtroom, overwrites=overwrites_public)
+        await guild.create_voice_channel("Trial Audio Alpha (VC)", category=cat_courtroom, overwrites=overwrites_public)
+        await guild.create_voice_channel("Trial Audio Beta (VC)", category=cat_courtroom, overwrites=overwrites_public)
+        await guild.create_voice_channel("Audience Gallery (VC)", category=cat_courtroom, overwrites=overwrites_public)
+
+        cat_cases = await guild.create_category("📁 ┃ EVIDENCE & CASE FILES")
+        await guild.create_text_channel("crime-scene-reports", category=cat_cases, overwrites=overwrites_public)
+        await guild.create_text_channel("active-investigations", category=cat_cases, overwrites=overwrites_public)
+        await guild.create_text_channel("verdicts-and-sentences", category=cat_cases, overwrites=overwrites_public)
 
         cat_staff = await guild.create_category("🔒 ┃ JUDICIAL CHAMBERS")
-        await guild.create_text_channel("private-deliberation", category=cat_staff, overwrites=overwrites_locked)
-        await guild.create_voice_channel("Chambers (VC)", category=cat_staff, overwrites=overwrites_locked)
+        await guild.create_text_channel("judge-tole-tole-office", category=cat_staff, overwrites=overwrites_locked)
+        await guild.create_text_channel("prosecution-defense-strategy", category=cat_staff, overwrites=overwrites_locked)
+        await guild.create_text_channel("jury-deliberation-room", category=cat_staff, overwrites=overwrites_locked)
+        await guild.create_voice_channel("High Council Meeting (VC)", category=cat_staff, overwrites=overwrites_locked)
 
     except Exception as e:
         print(f"Error during setup: {e}")
